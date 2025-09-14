@@ -1,13 +1,32 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt
 
 
 class TDOALocalizer:
-    def __init__(self, sample_rate=44100, mic_distance=0.10, sound_speed=343.0):
+    def __init__(self, sample_rate=44100, mic_distance=0.10, sound_speed=343.0,
+                 shahed_freq_low=650.0, shahed_freq_high=800.0):
         self.sample_rate = sample_rate
         self.mic_distance = mic_distance
         self.sound_speed = sound_speed
         self.max_tdoa = mic_distance / sound_speed
+
+        self.shahed_freq_low = shahed_freq_low
+        self.shahed_freq_high = shahed_freq_high
+
+    def _filter_shahed_band(self, signal):
+        nyquist = self.sample_rate / 2
+        low_norm = self.shahed_freq_low / nyquist
+        high_norm = self.shahed_freq_high / nyquist
+
+        low_norm = max(0.01, min(low_norm, 0.99))
+        high_norm = max(0.01, min(high_norm, 0.99))
+
+        if high_norm <= low_norm:
+            return signal
+
+        b, a = butter(4, [low_norm, high_norm], btype='band')
+        return filtfilt(b, a, signal)
 
     def gcc_phat(self, sig1, sig2):
         n = sig1.shape[0] + sig2.shape[0]
@@ -29,7 +48,10 @@ class TDOALocalizer:
         ch1 = audio_buffer[:, 0]
         ch2 = audio_buffer[:, 1]
 
-        tdoa, shift = self.gcc_phat(ch1, ch2)
+        ch1_filtered = self._filter_shahed_band(ch1)
+        ch2_filtered = self._filter_shahed_band(ch2)
+
+        tdoa, shift = self.gcc_phat(ch1_filtered, ch2_filtered)
 
         if abs(tdoa) > self.max_tdoa:
             return {
