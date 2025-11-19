@@ -13,7 +13,7 @@ logger = setup_logger(
 )
 
 class AudioReceiver:
-    def __init__(self, host='0.0.0.0', port=8889,
+    def __init__(self, host='0.0.0.0', port=8889, channels=2,
                  save_to_buffer=True, save_to_file=True, audio_file=None):
         self.host = host
         self.port = port
@@ -21,7 +21,7 @@ class AudioReceiver:
         self.sock = None
         self.audio_file = audio_file
         self.sample_rate = 44100
-        self.channels = 2
+        self.channels = channels
         self.sample_width = 2
         self.save_to_buffer = save_to_buffer
         self.save_to_file = save_to_file
