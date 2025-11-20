@@ -5,7 +5,7 @@ from scipy.signal import butter, filtfilt
 
 class TDOALocalizer:
     def __init__(self, sample_rate=44100, mic_distance=0.10, sound_speed=343.0,
-                 shahed_freq_low=700.0, shahed_freq_high=850.0):
+                 shahed_freq_low=650.0, shahed_freq_high=800.0):
         self.sample_rate = sample_rate
         self.mic_distance = mic_distance
         self.sound_speed = sound_speed
@@ -28,17 +28,42 @@ class TDOALocalizer:
         b, a = butter(4, [low_norm, high_norm], btype='band')
         return filtfilt(b, a, signal)
 
+    def _apply_hann(self, sig1, sig2):
+        n = min(len(sig1), len(sig2))
+        win = np.hanning(n)
+        return sig1[:n] * win, sig2[:n] * win
+
+    def _parabolic_interp(self, cc, idx):
+        if 0 < idx < len(cc) - 1:
+            y0, y1, y2 = cc[idx - 1], cc[idx], cc[idx + 1]
+            denom = 2 * (2 * y1 - y2 - y0)
+            if abs(denom) > 1e-12:
+                return idx + (y2 - y0) / denom
+        return idx
+
     def gcc_phat(self, sig1, sig2):
+        sig1, sig2 = self._apply_hann(sig1, sig2)
+
         n = sig1.shape[0] + sig2.shape[0]
+
         SIG1 = np.fft.rfft(sig1, n=n)
         SIG2 = np.fft.rfft(sig2, n=n)
+
         R = SIG1 * np.conj(SIG2)
         R /= np.abs(R) + 1e-15
+
         cc = np.fft.irfft(R, n=n)
+
         max_shift = int(n / 2)
         cc = np.concatenate((cc[-max_shift:], cc[:max_shift]))
-        shift = np.argmax(np.abs(cc)) - max_shift
+
+        peak_idx = np.argmax(np.abs(cc))
+
+        peak_idx_interp = self._parabolic_interp(cc, peak_idx)
+
+        shift = peak_idx_interp - max_shift
         tdoa = shift / float(self.sample_rate)
+
         return tdoa, shift
 
     def calculate_position(self, audio_buffer):
@@ -62,7 +87,8 @@ class TDOALocalizer:
                 'valid': False
             }
 
-        angle_rad = np.arcsin(tdoa * self.sound_speed / self.mic_distance)
+        x = np.clip(tdoa * self.sound_speed / self.mic_distance, -1, 1)
+        angle_rad = np.arcsin(x)
         angle_deg = np.degrees(angle_rad)
         norm_shift = np.clip(np.sin(angle_rad), -1, 1)
 
@@ -90,7 +116,6 @@ class TDOALocalizer:
             'fft_ch2': fft_ch2,
             'position': position_data
         }
-
 
 class TDOAVisualizer:
     def __init__(self, chunk_size=1024, sample_rate=44100):
