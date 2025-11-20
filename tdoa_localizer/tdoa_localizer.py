@@ -5,7 +5,7 @@ from scipy.signal import butter, filtfilt
 
 class TDOALocalizer:
     def __init__(self, sample_rate=44100, mic_distance=0.10, sound_speed=343.0,
-                 shahed_freq_low=650.0, shahed_freq_high=800.0):
+                 shahed_freq_low=700.0, shahed_freq_high=850.0):
         self.sample_rate = sample_rate
         self.mic_distance = mic_distance
         self.sound_speed = sound_speed
